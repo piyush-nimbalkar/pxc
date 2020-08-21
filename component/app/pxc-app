@@ -1,0 +1,109 @@
+#!/bin/bash
+
+function parse_params() {
+    key="$1"
+    case $key in
+        --name)
+            APP_NAME=$2
+            shift
+            ;;
+        --namespace)
+            APP_NAMESPACE=$2
+            shift
+            ;;
+        --package)
+            shift
+            ;;
+        --args)
+            APP_ARGS=$2
+            shift
+            ;;
+    esac
+}
+
+cmd="$1"
+shift
+case $cmd in
+    package)
+        echo "NAME             VERSION     DESCRIPTION"
+        echo "vitess           v6.0.20     Database clustering system for MySQL"
+        echo "elasticsearch    v6.8.0      Search and analytics engine"
+        ;;
+    install)
+        while [[ $# -ge 1 ]] ; do
+            parse_params $1 $2
+            shift
+        done
+        if [ -z "$APP_NAME" ] ; then
+            echo "Application name cannot be empty"
+            exit 1
+        fi
+        if [ -z "$APP_NAMESPACE" ] ; then
+            APP_NAMESPACE=default
+        fi
+        echo "Installing application $APP_NAME in $APP_NAMESPACE namespace"
+        helm install -n $APP_NAMESPACE --set appName=$APP_NAME,$APP_ARGS $APP_NAME local/vitess > /dev/null 2>&1
+        ;;
+    list)
+        while [[ $# -ge 1 ]] ; do
+            parse_params $1 $2
+            shift
+        done
+        if [ -z "$APP_NAMESPACE" ] ; then
+            APP_NAMESPACE=default
+        fi
+        kubectl -n $APP_NAMESPACE get applications
+        ;;
+    get)
+        while [[ $# -ge 1 ]] ; do
+            parse_params $1 $2
+            shift
+        done
+        if [ -z "$APP_NAME" ] ; then
+            echo "Application name cannot be empty"
+            exit 1
+        fi
+        if [ -z "$APP_NAMESPACE" ] ; then
+            APP_NAMESPACE=default
+        fi
+        kubectl -n $APP_NAMESPACE get applications $APP_NAME
+        ;;
+    describe)
+        while [[ $# -ge 1 ]] ; do
+            parse_params $1 $2
+            shift
+        done
+        if [ -z "$APP_NAME" ] ; then
+            echo "Application name cannot be empty"
+            exit 1
+        fi
+        if [ -z "$APP_NAMESPACE" ] ; then
+            APP_NAMESPACE=default
+        fi
+        echo -e "Status:\t\t\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.phase')"
+        echo -e "Version:\t\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.version')"
+        echo
+        echo -e "Internal Endpoint:\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.internalEndpoint')"
+        echo -e "External Endpoint:\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.externalEndpoint')"
+        echo -e "Dashboard:\t\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.dashboard')"
+        echo -e "Metrics Endpoint:\t $(kubectl -n $APP_NAMESPACE get applications $APP_NAME -ojson | jq -r '.status.metricsEndpoint')"
+        ;;
+    delete)
+        while [[ $# -ge 1 ]] ; do
+            parse_params $1 $2
+            shift
+        done
+        if [ -z "$APP_NAME" ] ; then
+            echo "Application name cannot be empty"
+            exit 1
+        fi
+        if [ -z "$APP_NAMESPACE" ] ; then
+            APP_NAMESPACE=default
+        fi
+        echo "Uninstalling application $APP_NAME from $APP_NAMESPACE namespace"
+        helm uninstall $APP_NAME -n $APP_NAMESPACE > /dev/null 2>&1
+        ;;
+    *)
+        echo "Error: Invalid command"
+        exit 1
+esac
